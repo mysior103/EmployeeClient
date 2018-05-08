@@ -4,7 +4,7 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 
-public class ServerConnection implements ServerConnectionStrategy {
+public class ServerConnection implements ConnectionStrategy {
     public String getIpAddress() {
         return ipAddress;
     }

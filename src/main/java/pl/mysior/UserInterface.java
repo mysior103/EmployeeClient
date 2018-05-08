@@ -1,5 +1,7 @@
 package pl.mysior;
 
+import pl.mysior.AllWorkers;
+import pl.mysior.AllWorkersImplService;
 import pl.mysior.BuisnessObject.Dealer;
 import pl.mysior.BuisnessObject.Director;
 import pl.mysior.BuisnessObject.Worker;
@@ -9,36 +11,20 @@ import pl.mysior.DAO.WorkerDAO;
 import pl.mysior.Services.RMIServiceClient;
 import pl.mysior.Services.Serializer;
 import pl.mysior.Services.ServerConnection;
-import pl.mysior.Services.ServerConnectionStrategy;
+import pl.mysior.Services.ConnectionStrategy;
 
-import java.io.*;
 import java.math.BigDecimal;
-import java.rmi.Naming;
 import java.util.*;
 
 import static pl.mysior.Services.Serializer.getFileNameWithDate;
+import static pl.mysior.InputScanner.*;
 
 public class UserInterface {
-    Scanner s = null;
+
     String authKey = null;
 
     public UserInterface() {
         menu();
-    }
-
-    private String userInput() {
-        s = new Scanner(System.in);
-        return s.nextLine();
-    }
-
-    private int userInputInt() {
-        try {
-            s = new Scanner(System.in);
-        } catch (InputMismatchException e) {
-            System.out.println(e.toString());
-        }
-
-        return s.nextInt();
     }
 
     public void menu() {
@@ -67,7 +53,7 @@ public class UserInterface {
                     backup();
                     break;
                 case 5:
-                    download();
+                    selectMethodOfConnection();
                     break;
                 case 0:
                     selected = true;
@@ -102,12 +88,9 @@ public class UserInterface {
     }
 
     private void listWorkers() {
-        long startTime = System.currentTimeMillis();
         System.out.println("1. Lista Pracowników:");
         WorkerDAO workerDAO = new WorkerDAO();
         List<Object> all = workerDAO.getAllWorkers();
-        long estimatedTime = System.currentTimeMillis() - startTime;
-        System.out.println("Czas: " + estimatedTime);
         int foreachIndex = 1;
         if (!all.isEmpty()) {
             for (Object work : all) {
@@ -286,10 +269,6 @@ public class UserInterface {
             String user = userInput();
             System.out.println("Podaj hasło: \t\t\t");
             String password = userInput();
-//            Console console = System.console();
-//            char passwordArray[] = console.readPassword("Podaj hasło: ");
-//            String password = new String(passwordArray);
-            //System.out.println(password);
             authKey = getAuthKeyThrowRMI(user, password);
             if (authKey == null) {
                 correctAuth = false;
@@ -301,28 +280,44 @@ public class UserInterface {
         }
     }
 
+    private void selectMethodOfConnection() {
+
+        boolean correctInput = false;
+        while (correctInput) {
+            System.out.println("Wybierz metodę połączenia: [1] Web Socket, [2] Web Service.\n");
+            int choose = userInputInt();
+            if (choose == 1) {
+                download();
+                correctInput = true;
+            } else if (choose == 2) {
+                webServiceTest();
+                correctInput = true;
+            } else {
+                System.out.println("Błędny wybór!");
+                correctInput = false;
+            }
+        }
+
+    }
+
+    //TODO:
+    // zamienić miejscami logowanie i połączenie, bo najpierw sie laczy na default
+    // a pozniej jeszcze raz sie laczy na wybranym porcie. bez sensu
     private void download() {
         Object receivedData = null;
 
         System.out.println("5. Pobierz dane z sieci\n");
         authorize();
         System.out.println("\nPodaj dane serwera, naciśnij ENTER jeśli domyślne.\n");
-
-        ServerConnection server = new ServerConnection();
-
+        ServerConnection server = new ServerConnection();//<-------------------
         System.out.print("Adres: \t\t\t\t");
-
-
         if (userInput().equals("")) System.out.println(server.getIpAddress() + "\n");
         else server.setIpAddress(userInput());
-
         System.out.print("Port: \t\t\t\t");
-
         if (userInput().equals("")) System.out.println(server.getPort() + "\n");
         else server.setPort(userInputInt());
-
         try {
-            ServerConnectionStrategy conServer = new ServerConnection();
+            ConnectionStrategy conServer = new ServerConnection();//<------------
             if (conServer.connect()) {
                 receivedData = conServer.getCustomers(authKey);
                 if (!receivedData.equals(null)) {
@@ -343,10 +338,28 @@ public class UserInterface {
             e.printStackTrace();
         }
     }
+
     private String getAuthKeyThrowRMI(String userName, String password) {
         RMIServiceClient rmiClient = new RMIServiceClient();
         String authKey = rmiClient.getAuthKey(userName, password);
         return authKey;
+    }
+
+    private void webServiceTest() {
+        AllWorkersImplService allWorkersImplService = new AllWorkersImplService();
+        AllWorkers workers = allWorkersImplService.getAllWorkersImplPort();
+        List<pl.mysior.Dealer> allDealers = workers.getAllDealers();
+        List<pl.mysior.Director> allDirectors = workers.getAllDirectors();
+        if(!allDealers.isEmpty()||!allDirectors.isEmpty()){
+            replaceDirectorsInDatabase(allDirectors);
+        }
+
+
+
+        System.out.println();
+    }
+    private void replaceDirectorsInDatabase(List<Director> directors){
+
     }
 
 }
