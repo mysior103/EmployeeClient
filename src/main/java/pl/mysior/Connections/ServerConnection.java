@@ -1,8 +1,10 @@
-package pl.mysior.Services;
+package pl.mysior.Connections;
 
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ServerConnection implements ConnectionStrategy {
     public String getIpAddress() {
@@ -47,10 +49,11 @@ public class ServerConnection implements ConnectionStrategy {
     }
 
     @Override
-    public Object getCustomers(String authKey) throws Exception {
+    public List<Object> getCustomers(String authKey) throws Exception {
         authorize(authKey);
         ObjectInputStream ois = new ObjectInputStream(s.getInputStream());
-        return ois.readObject();
+        Object received = ois.readObject();
+        return (ArrayList) received;
     }
 
     private void authorize(String authKey) throws Exception {

@@ -4,7 +4,7 @@ import pl.mysior.BuisnessObject.Dealer;
 import pl.mysior.BuisnessObject.Director;
 
 public class DealerMapper {
-    public Dealer map(pl.mysior.Dealer dealerWS){
+    public Dealer map(pl.mysior.webservice.Dealer dealerWS){
         Dealer dealer = new Dealer();
         dealer.setID(dealerWS.getID());
         dealer.setName(dealerWS.getName());

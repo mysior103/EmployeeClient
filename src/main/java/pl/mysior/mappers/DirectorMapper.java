@@ -4,7 +4,7 @@ import pl.mysior.BuisnessObject.Director;
 
 public class DirectorMapper {
 
-    public Director map(pl.mysior.Director directorWS){
+    public Director map(pl.mysior.webservice.Director directorWS){
         Director director = new Director();
         director.setID(directorWS.getID());
         director.setName(directorWS.getName());

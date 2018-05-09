@@ -1,21 +1,22 @@
 package pl.mysior;
 
-import pl.mysior.AllWorkers;
-import pl.mysior.AllWorkersImplService;
 import pl.mysior.BuisnessObject.Dealer;
 import pl.mysior.BuisnessObject.Director;
 import pl.mysior.BuisnessObject.Worker;
+import pl.mysior.Connections.ConnectionStrategy;
+import pl.mysior.Connections.ServerConnection;
+import pl.mysior.Connections.ServiceConnection;
 import pl.mysior.DAO.DealerDAO;
 import pl.mysior.DAO.DirectorDAO;
 import pl.mysior.DAO.WorkerDAO;
-import pl.mysior.Services.RMIServiceClient;
-import pl.mysior.Services.Serializer;
-import pl.mysior.Services.ServerConnection;
-import pl.mysior.Services.ConnectionStrategy;
+import pl.mysior.Services.*;
+import pl.mysior.mappers.DealerMapper;
+import pl.mysior.mappers.DirectorMapper;
 
 import java.math.BigDecimal;
 import java.util.*;
 
+import static pl.mysior.Services.Authorizator.authorize;
 import static pl.mysior.Services.Serializer.getFileNameWithDate;
 import static pl.mysior.InputScanner.*;
 
@@ -262,76 +263,57 @@ public class UserInterface {
         return director;
     }
 
-    private void authorize() {
-        boolean correctAuth = false;
-        while (!correctAuth) {
-            System.out.println("Podaj użytkownika: \t\t");
-            String user = userInput();
-            System.out.println("Podaj hasło: \t\t\t");
-            String password = userInput();
-            authKey = getAuthKeyThrowRMI(user, password);
-            if (authKey == null) {
-                correctAuth = false;
-                System.out.println("Błąd autoryzacji, spróbuj ponownie!");
-            } else {
-                correctAuth = true;
-                System.out.println("\nZalogowano pomyslnie!\n----------------------------------------");
-            }
-        }
-    }
 
     private void selectMethodOfConnection() {
 
-        boolean correctInput = false;
+        boolean correctInput = true;
         while (correctInput) {
-            System.out.println("Wybierz metodę połączenia: [1] Web Socket, [2] Web Service.\n");
+            System.out.println("Wybierz metodę połączenia: \n[1]Web Socket, [2]Web Service:\n");
             int choose = userInputInt();
             if (choose == 1) {
-                download();
-                correctInput = true;
+                webSocket();
+                break;
             } else if (choose == 2) {
-                webServiceTest();
-                correctInput = true;
+                webService();
+                break;
             } else {
                 System.out.println("Błędny wybór!");
-                correctInput = false;
             }
         }
 
     }
 
-    //TODO:
-    // zamienić miejscami logowanie i połączenie, bo najpierw sie laczy na default
-    // a pozniej jeszcze raz sie laczy na wybranym porcie. bez sensu
-    private void download() {
-        Object receivedData = null;
-
-        System.out.println("5. Pobierz dane z sieci\n");
-        authorize();
-        System.out.println("\nPodaj dane serwera, naciśnij ENTER jeśli domyślne.\n");
-        ServerConnection server = new ServerConnection();//<-------------------
-        System.out.print("Adres: \t\t\t\t");
-        if (userInput().equals("")) System.out.println(server.getIpAddress() + "\n");
-        else server.setIpAddress(userInput());
-        System.out.print("Port: \t\t\t\t");
-        if (userInput().equals("")) System.out.println(server.getPort() + "\n");
-        else server.setPort(userInputInt());
+    private void webSocket() {
+        List<Object> receivedDataList;
         try {
-            ConnectionStrategy conServer = new ServerConnection();//<------------
-            if (conServer.connect()) {
-                receivedData = conServer.getCustomers(authKey);
-                if (!receivedData.equals(null)) {
-                    System.out.println("----------------------------------------\n\nDane pobrano prawidłowo!\n");
-                    System.out.println("Zapisać pobrane dane? [T]/[N]");
-                    if (userInput().toUpperCase().charAt(0) == 'T') {
-                        System.out.print("Zapisywanie... ");
-                        Serializer.replaceDeserializedInDatabase((ArrayList) receivedData);
-                        System.out.println("Sukces!");
+            System.out.println("5. Pobierz dane z sieci\n");
+            System.out.println("\nPodaj dane serwera, naciśnij ENTER jeśli domyślne.\n");
+            ConnectionStrategy server = new ServerConnection();
+            System.out.print("Adres: \t\t\t\t");
+            if (userInput().equals("")) System.out.println(((ServerConnection) server).getIpAddress() + "\n");
+            else ((ServerConnection) server).setIpAddress(userInput());
+            System.out.print("Port: \t\t\t\t");
+            if (userInput().equals("")) System.out.println(((ServerConnection) server).getPort() + "\n");
+            else ((ServerConnection) server).setPort(userInputInt());
+            authKey = authorize();
+            if (server.connect()) {
+                receivedDataList = server.getCustomers(authKey);
+                try {
+                    if (!receivedDataList.isEmpty()) {
+                        System.out.println("----------------------------------------\n\nDane pobrano prawidłowo!\n");
+                        System.out.println("Zapisać pobrane dane? [T]/[N]");
+                        if (userInput().toUpperCase().charAt(0) == 'T') {
+                            System.out.print("Zapisywanie... ");
+                            Serializer.replaceDeserializedInDatabase(receivedDataList);
+                            System.out.println("Sukces!");
+                        } else {
+                            System.out.println("Dane nie zostały zapisane");
+                        }
                     } else {
-                        System.out.println("Dane nie zostały zapisane");
+                        System.out.println("Błąd w pobieraniu danych! Spróbuj jeszcze raz");
                     }
-                } else {
-                    System.out.println("Błąd w pobieraniu danych! Spróbuj jeszcze raz");
+                } catch (NullPointerException ne) {
+                    System.out.println("Błędny klucz dostepu. Nie można pobrać danych.");
                 }
             }
         } catch (Exception e) {
@@ -339,27 +321,49 @@ public class UserInterface {
         }
     }
 
-    private String getAuthKeyThrowRMI(String userName, String password) {
-        RMIServiceClient rmiClient = new RMIServiceClient();
-        String authKey = rmiClient.getAuthKey(userName, password);
-        return authKey;
-    }
-
-    private void webServiceTest() {
-        AllWorkersImplService allWorkersImplService = new AllWorkersImplService();
-        AllWorkers workers = allWorkersImplService.getAllWorkersImplPort();
-        List<pl.mysior.Dealer> allDealers = workers.getAllDealers();
-        List<pl.mysior.Director> allDirectors = workers.getAllDirectors();
-        if(!allDealers.isEmpty()||!allDirectors.isEmpty()){
-            replaceDirectorsInDatabase(allDirectors);
+    private void webService() {
+        authKey = authorize();
+        try {
+            ConnectionStrategy service = new ServiceConnection();
+            List<Object> allObjects = service.getCustomers(authKey); // Why there is CUSTOMERS???????????? -> correct!
+            System.out.println("----------------------------------------\n\nDane pobrano prawidłowo!\n");
+            System.out.println("Zapisać pobrane dane? [T]/[N]");
+            if (userInput().toUpperCase().charAt(0) == 'T') {
+                System.out.print("Zapisywanie... ");
+                saveReceiveObjectsToDB(allObjects);
+                System.out.println("Sukces!");
+            } else {
+                System.out.println("Dane nie zostały zapisane");
+            }
+            System.out.println("Dane pobrano i zapisano poprawnie.");
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-
-
-
-        System.out.println();
-    }
-    private void replaceDirectorsInDatabase(List<Director> directors){
-
     }
 
+    private void saveReceiveObjectsToDB(List<Object> allObjects) throws Exception {
+        WorkerDAO workerDAO = new WorkerDAO();
+        workerDAO.deleteAllWorkers();
+
+        DealerMapper dealerMapper = new DealerMapper();
+        DirectorMapper directorMapper = new DirectorMapper();
+
+        for (Object obj : allObjects) {
+            if (obj.getClass() == pl.mysior.webservice.Dealer.class) {
+                DealerDAO dealerDAO = new DealerDAO();
+                pl.mysior.webservice.Dealer dealerWS = (pl.mysior.webservice.Dealer) obj;
+                Dealer dealer = dealerMapper.map(dealerWS);
+                dealerDAO.addDealer(dealer);
+
+            } else if (obj.getClass() == pl.mysior.webservice.Director.class) {
+                DirectorDAO directorDAO = new DirectorDAO();
+                pl.mysior.webservice.Director directorWS = (pl.mysior.webservice.Director) obj;
+                Director director = directorMapper.map(directorWS);
+                directorDAO.addDirector(director);
+
+            } else {
+                throw new Exception("FATAL ERROR - DANE UTRACONE!");
+            }
+        }
+    }
 }
